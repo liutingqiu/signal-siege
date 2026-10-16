@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Signal Siege | Agent Arena</title>
+  <style>
+    :root { color-scheme: dark; --ink:#f4f1ea; --muted:#a8aaa5; --panel:#171b1f; --line:#303940; --coral:#ff765f; --teal:#54d6c1; --gold:#e7bf61; --violet:#a78bfa; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#0b0e10; color:var(--ink); font:15px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button, input { font:inherit; }
+    button { cursor:pointer; border:1px solid var(--line); color:var(--ink); background:#20272c; padding:.6rem .8rem; border-radius:7px; }
+    button:hover { border-color:#7f918f; background:#293239; }
+    button.primary { background:var(--coral); border-color:var(--coral); color:#1a1110; font-weight:750; }
+    button.ghost { background:transparent; }
+    input { width:100%; background:#0f1316; color:var(--ink); border:1px solid var(--line); padding:.65rem .75rem; border-radius:6px; }
+    .shell { max-width:1180px; margin:0 auto; padding:28px 22px 44px; }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:end; padding-bottom:20px; border-bottom:1px solid var(--line); }
+    .kicker { color:var(--teal); letter-spacing:.15em; text-transform:uppercase; font-size:.72rem; font-weight:800; }
+    h1 { margin:.25rem 0 0; font-size:clamp(2rem,5vw,4rem); letter-spacing:-.03em; line-height:1; }
+    .lede { max-width:610px; color:var(--muted); margin:.7rem 0 0; }
+    .layout { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(290px,.7fr); gap:18px; margin-top:20px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; }
+    .setup { display:grid; gap:12px; }
+    .row { display:flex; gap:8px; align-items:center; }
+    .row > * { flex:1; }
+    .label { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; font-weight:750; }
+    .status { min-height:24px; color:var(--gold); }
+    .game { display:none; grid-template-columns:minmax(0,1fr) 230px; gap:18px; }
+    .game.ready { display:grid; }
+    .board-wrap { display:grid; gap:12px; }
+    .board { width:min(100%,640px); aspect-ratio:1; display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin:auto; }
+    .cell { position:relative; min-width:0; aspect-ratio:1; display:grid; place-items:center; padding:0; border-radius:5px; background:#20262a; border:1px solid #313a40; font-weight:800; font-size:clamp(.7rem,2vw,1rem); }
+    .cell:hover { border-color:var(--teal); }
+    .cell.beacon { background:#4b3b1c; border-color:var(--gold); }
+    .cell.selected { outline:3px solid var(--coral); outline-offset:1px; }
+    .unit { width:68%; height:68%; display:grid; place-items:center; border-radius:50%; color:#0b0e10; border:2px solid #fff6; font-size:.72rem; box-shadow:0 3px 10px #0008; }
+    .unit.coral { background:var(--coral); }.unit.teal { background:var(--teal); }.unit.gold { background:var(--gold); }.unit.violet { background:var(--violet); }
+    .side { display:grid; align-content:start; gap:12px; }
+    .stat { display:flex; justify-content:space-between; padding:.45rem 0; border-bottom:1px solid #293136; }
+    .stat:last-child { border-bottom:0; }
+    .players { display:grid; gap:7px; }
+    .player { display:flex; justify-content:space-between; gap:10px; padding:.55rem .65rem; background:#101417; border-left:4px solid var(--line); }
+    .player.active { border-left-color:var(--teal); }.player.coral { border-left-color:var(--coral); }.player.teal { border-left-color:var(--teal); }.player.gold { border-left-color:var(--gold); }.player.violet { border-left-color:var(--violet); }
+    .log { max-height:190px; overflow:auto; display:grid; gap:6px; color:var(--muted); font-size:.83rem; }
+    .api { color:var(--muted); font-size:.83rem; }
+    code { color:var(--gold); }
+    @media (max-width:800px) { header { display:block; }.layout,.game.ready { grid-template-columns:1fr; }.side { grid-template-columns:repeat(2,minmax(0,1fr)); }.side > :last-child { grid-column:1/-1; } }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header><div><div class="kicker">Agent Arena / 01</div><h1>Signal Siege</h1><p class="lede">A fast turn-based battle for the central beacon. Humans click the board; agents use the same match through a small JSON API.</p></div><div class="api">No login. No install.<br><code>GET /api/health</code></div></header>
+  <section class="layout"><div class="panel setup" id="setup"><div class="label">Start or join a match</div><div class="row"><input id="name" value="Commander" aria-label="name"><button class="primary" id="create">Create match</button></div><div class="row"><input id="joinCode" placeholder="Match ID" aria-label="match id"><button id="join">Join match</button></div><div class="row"><button class="ghost" id="bot">Add Atlas bot</button><button class="ghost" id="refresh">Refresh</button></div><div class="status" id="status">Create a match, then add a bot or share the match ID.</div></div><div class="panel"><div class="label">Rules</div><p>Each commander has two actions per turn. Move one tile, attack an adjacent enemy, or charge the center beacon. Hold three charges to win; eliminating every opposing unit also wins.</p><p class="api">Agent flow: <code>POST /api/matches</code>, <code>POST /join</code>, <code>GET /api/matches/:id</code>, then <code>POST /move</code> and <code>POST /end-turn</code>.</p></div></section>
+  <section class="game" id="game"><div class="panel board-wrap"><div class="row"><div><div class="label">Match</div><strong id="matchId">-</strong></div><div style="text-align:right"><div class="label">Turn</div><strong id="turn">-</strong></div></div><div class="board" id="board"></div><div class="row"><button class="primary" id="endTurn">End turn</button><button id="capture">Charge beacon</button><button id="addBotGame">Add Atlas bot</button></div></div><aside class="side"><div class="panel"><div class="label">State</div><div class="stat"><span>Active</span><strong id="active">-</strong></div><div class="stat"><span>Beacon</span><strong id="charge">0 / 3</strong></div><div class="stat"><span>Selected</span><strong id="selected">-</strong></div></div><div class="panel"><div class="label">Players</div><div class="players" id="players"></div></div><div class="panel"><div class="label">Match log</div><div class="log" id="log"></div></div></aside></section>
+</main>
+<script>
+  let match = null, player = null, selected = null;
+  const $ = id => document.getElementById(id);
+  const api = async (path, body) => { const r = await fetch(path, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {}); const d = await r.json(); if(!r.ok) throw new Error(d.error || 'request failed'); return d; };
+  const setStatus = text => $('status').textContent = text;
+  function render() {
+    if (!match) return;
+    $('setup').style.display = 'none'; $('game').classList.add('ready'); $('matchId').textContent = match.joinCode + ' / ' + match.id; $('turn').textContent = match.turn || '-';
+    const active = match.players.find(p => p.id === match.activePlayer); $('active').textContent = active ? active.name : 'Lobby'; $('charge').textContent = `${match.beacon.charge} / 3`; $('selected').textContent = selected || 'none';
+    $('players').innerHTML = match.players.map(p => `<div class="player ${p.color} ${p.id===match.activePlayer?'active':''}"><span>${p.name}${p.bot?' <small>BOT</small>':''}</span><strong>${p.score||0}</strong></div>`).join('');
+    $('log').innerHTML = match.log.map(x => `<div>${x}</div>`).join('');
+    const units = Object.fromEntries(match.units.map(u => [u.x+','+u.y,u])); const bx = match.beacon.x + ',' + match.beacon.y;
+    $('board').innerHTML = Array.from({length:49},(_,i)=>{ const x=i%7,y=Math.floor(i/7),key=x+','+y,u=units[key]; const mark=u?`<span class="unit ${match.players.find(p=>p.id===u.playerId)?.color||''}">${u.name.slice(-1)}</span>`:''; return `<button class="cell ${key===bx?'beacon':''} ${u&&u.id===selected?'selected':''}" data-x="${x}" data-y="${y}" data-unit="${u?.id||''}">${mark}</button>`; }).join('');
+    document.querySelectorAll('.cell').forEach(cell => cell.onclick = () => clickCell(cell));
+  }
+  async function refresh() { if(!match) return; try { match=(await api('/api/matches/'+match.id)).match; render(); } catch(e) { setStatus(e.message); } }
+  async function create() { try { match=(await api('/api/matches',{maxPlayers:2})).match; player=(await api('/api/matches/'+match.id+'/join',{name:$('name').value})).player; match=(await api('/api/matches/'+match.id)).match; $('joinCode').value=match.id; setStatus('Match created. Add the Atlas bot or share the match ID.'); render(); } catch(e){setStatus(e.message);} }
+  async function join() { try { const id=$('joinCode').value.trim(); const d=await api('/api/matches/'+id+'/join',{name:$('name').value}); match=d.match; player=d.player; setStatus('Joined. Pick a unit, then click an adjacent tile.'); render(); } catch(e){setStatus(e.message);} }
+  async function addBot() { if(!match) return setStatus('Create a match first.'); try { const d=await api('/api/matches/'+match.id+'/bot',{name:'Atlas'}); match=d.match; setStatus('Atlas joined. Your match is live.'); render(); } catch(e){setStatus(e.message);} }
+  async function clickCell(cell) { if(!player || !match) return; const unitId=cell.dataset.unit; if(unitId && match.units.find(u=>u.id===unitId)?.playerId===player.id){ selected=unitId; render(); return; } if(!selected) return setStatus('Select one of your units first.'); try { const x=Number(cell.dataset.x),y=Number(cell.dataset.y); const d=await api('/api/matches/'+match.id+'/move',{playerId:player.id,unitId:selected,action:'move',x,y}); match=d.match; selected=null; render(); } catch(e){setStatus(e.message);} }
+  async function endTurn(){if(!player||!match)return;try{match=(await api('/api/matches/'+match.id+'/end-turn',{playerId:player.id})).match;selected=null;render();}catch(e){setStatus(e.message);}}
+  async function capture(){if(!player||!match||!selected)return setStatus('Select a unit on the beacon first.');try{match=(await api('/api/matches/'+match.id+'/move',{playerId:player.id,unitId:selected,action:'capture'})).match;selected=null;render();}catch(e){setStatus(e.message);}}
+  $('create').onclick=create; $('join').onclick=join; $('bot').onclick=addBot; $('refresh').onclick=refresh; $('endTurn').onclick=endTurn; $('capture').onclick=capture; $('addBotGame').onclick=addBot;
+</script>
+</body>
+</html>
