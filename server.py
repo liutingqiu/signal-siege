@@ -191,8 +191,68 @@ class Match:
                     self.turn += 1
                     candidate["actions"] = MAX_ACTIONS
                     self.log.append(f"Turn {self.turn}: {candidate['name']} moves.")
+                    if candidate.get("bot"):
+                        self._bot_turn(candidate["id"])
                     return
             self._check_win()
+
+    def _bot_turn(self, player_id: str) -> None:
+        """Give the built-in bot a deterministic legal turn, then pass onward."""
+        if self.status != "active":
+            return
+        bot = self.player(player_id)
+        center = (GRID // 2, GRID // 2)
+        for _ in range(MAX_ACTIONS):
+            if self.status != "active" or self.active_player != player_id:
+                return
+            units = [u for u in self.units if u["playerId"] == player_id and u["hp"] > 0]
+            if not units:
+                self._check_win()
+                return
+            unit = min(units, key=lambda u: abs(u["x"] - center[0]) + abs(u["y"] - center[1]))
+            if (unit["x"], unit["y"]) == center:
+                self.move(player_id, unit["id"], "capture")
+                continue
+            adjacent_enemy = next(
+                (other for other in self.units
+                 if other["playerId"] != player_id and other["hp"] > 0
+                 and abs(other["x"] - unit["x"]) + abs(other["y"] - unit["y"]) == 1),
+                None,
+            )
+            if adjacent_enemy:
+                self.move(player_id, unit["id"], "attack", target_id=adjacent_enemy["id"])
+                continue
+            candidates = []
+            if unit["x"] < center[0]:
+                candidates.append((unit["x"] + 1, unit["y"]))
+            elif unit["x"] > center[0]:
+                candidates.append((unit["x"] - 1, unit["y"]))
+            if unit["y"] < center[1]:
+                candidates.append((unit["x"], unit["y"] + 1))
+            elif unit["y"] > center[1]:
+                candidates.append((unit["x"], unit["y"] - 1))
+            candidates.extend(((unit["x"] + 1, unit["y"]), (unit["x"] - 1, unit["y"]),
+                               (unit["x"], unit["y"] + 1), (unit["x"], unit["y"] - 1)))
+            destination = next(
+                ((x, y) for x, y in candidates if 0 <= x < GRID and 0 <= y < GRID and not self._occupied(x, y, unit["id"])),
+                None,
+            )
+            if destination is None:
+                break
+            self.move(player_id, unit["id"], "move", x=destination[0], y=destination[1])
+        if self.status == "active" and self.active_player == player_id:
+            bot["actions"] = MAX_ACTIONS
+            index = next(i for i, p in enumerate(self.players) if p["id"] == player_id)
+            for offset in range(1, len(self.players) + 1):
+                candidate = self.players[(index + offset) % len(self.players)]
+                if any(u["playerId"] == candidate["id"] and u["hp"] > 0 for u in self.units):
+                    self.active_player = candidate["id"]
+                    self.turn += 1
+                    candidate["actions"] = MAX_ACTIONS
+                    self.log.append(f"Turn {self.turn}: {candidate['name']} moves.")
+                    if candidate.get("bot"):
+                        self._bot_turn(candidate["id"])
+                    return
 
     def state(self) -> dict[str, Any]:
         with self.lock:

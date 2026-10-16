@@ -38,7 +38,8 @@ class SignalSiegeTest(unittest.TestCase):
         self.assertEqual(state["activePlayer"], player)
         self.call(f"/api/matches/{created['id']}/end-turn", {"playerId": player})
         state = self.call(f"/api/matches/{created['id']}")["match"]
-        self.assertNotEqual(state["activePlayer"], player)
+        self.assertEqual(state["activePlayer"], player)
+        self.assertTrue(any("Atlas" in line and "moved" in line for line in state["log"]))
 
     def test_move_rules(self):
         match = Match(2)
